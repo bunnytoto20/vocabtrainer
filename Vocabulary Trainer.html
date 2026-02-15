@@ -341,8 +341,10 @@ body.mobile-view #startHomeBtn {
 <div id="startScreen" class="panel" style="display:none;">
   <h2>📖 Vocabulary Trainer</h2>
   <input type="file" id="fileInput" accept=".txt">
+  <input type="file" id="loadSaveInput" accept=".json" style="display:none;">
   <div class="start-actions">
     <button id="startButton" class="start-btn" onclick="startQuiz()" disabled>Start</button>
+    <button onclick="triggerLoadSave()">Load Save</button>
     <button class="start-gear" onclick="openSettings()" aria-label="Settings">⚙️</button>
     <button id="startHomeBtn" onclick="goHome()">Home</button>
   </div>
@@ -409,6 +411,7 @@ body.mobile-view #startHomeBtn {
     <button onclick="openSettings()">⚙️</button>
     <button onclick="openWordList()">📋 View Words</button>
     <button onclick="openCreateFromLearn()">🛠️ Edit in Create</button>
+    <button onclick="saveProgress()">💾 Save Progress</button>
     <button onclick="goHome()">🏠 Home</button>
   </div>
 
@@ -439,6 +442,7 @@ body.mobile-view #startHomeBtn {
     <p>Total rounds: <span id="totalRounds">1</span></p>
     <button onclick="restartQuiz()">🔄 Restart Quiz</button>
     <button onclick="viewWordResults()">📊 View Word Results</button>
+    <button onclick="saveResults()">💾 Save Results</button>
   </div>
 
   <!-- BOTTOM STATS -->
@@ -608,6 +612,88 @@ function parseVocabText(text){
     .filter(v => v.term && v.def);
 }
 
+function getWordStatus(stats){
+  if(!stats) return "";
+  if(stats.correctFirstTry) return "Correct first try";
+  if(stats.correctWithHint) return "Correct with hint";
+  if(stats.incorrectWithHint) return "Incorrect with hint";
+  if(stats.hintUsed) return "Hint used";
+  if(stats.incorrect > 0) return "Incorrect";
+  return "";
+}
+
+function getSessionSummary(){
+  const totalWords = Object.keys(wordStats).length;
+  const correctFirst = Object.values(wordStats).filter(w=>w.correctFirstTry).length;
+  const missedWords = Object.values(wordStats).filter(w=>(w.incorrect||0)>0 || w.incorrectWithHint).length;
+  const hintsUsed = Object.values(wordStats).filter(w=>w.hintUsed).length;
+  const percentScore = totalWords>0 ? Math.round(correctFirst/totalWords*100):100;
+  return {totalWords, correctFirst, missedWords, hintsUsed, percentScore, totalRounds: round};
+}
+
+function getWordListStats(){
+  const swap = document.getElementById("swapOrder").checked;
+  return sourceList.map(item => {
+    const stats = wordStats[item.term] || {};
+    return {
+      term: swap ? item.def : item.term,
+      definition: swap ? item.term : item.def,
+      status: getWordStatus(stats)
+    };
+  });
+}
+
+function buildSavePayload(saveType){
+  return {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    saveType: saveType,
+    summary: getSessionSummary(),
+    wordListStats: getWordListStats(),
+    state: {
+      vocab: vocab,
+      index: index,
+      round: round,
+      streak: streak,
+      missed: missed,
+      sourceList: sourceList,
+      wordStats: wordStats,
+      hintUsed: Array.from(hintUsedSet),
+      fileReady: fileReady,
+      currentTheme: currentTheme,
+      layoutMode: layoutMode,
+      settings: {
+        forceRetype: document.getElementById("forceRetype").checked,
+        forceRetypeSkip: document.getElementById("forceRetypeSkip").checked,
+        enableSound: document.getElementById("enableSound").checked,
+        enableShake: document.getElementById("enableShake").checked,
+        flashScreen: document.getElementById("flashScreen").checked,
+        swapOrder: document.getElementById("swapOrder").checked,
+        hintLetters: document.getElementById("hintLetters").value
+      },
+      ui: {
+        screen: document.getElementById("homeScreen").style.display !== "none" ? "home" :
+          document.getElementById("startScreen").style.display !== "none" ? "start" :
+          document.getElementById("createScreen").style.display !== "none" ? "create" : "main",
+        quizVisible: document.getElementById("quiz").style.display !== "none",
+        endVisible: document.getElementById("endScreen").style.display !== "none"
+      }
+    }
+  };
+}
+
+function downloadJson(filename, data){
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function loadVocabData(parsed){
   if(!parsed.length){
     fileReady = false;
@@ -638,6 +724,103 @@ function loadVocabData(parsed){
   return true;
 }
 
+function saveProgress(){
+  if(!fileReady){
+    alert("No active quiz to save yet.");
+    return;
+  }
+  downloadJson("vocab-progress-save.json", buildSavePayload("progress"));
+}
+
+function saveResults(){
+  if(!fileReady){
+    alert("No results to save yet.");
+    return;
+  }
+  downloadJson("vocab-results-save.json", buildSavePayload("results"));
+}
+
+function triggerLoadSave(){
+  const el = document.getElementById("loadSaveInput");
+  if(el) el.click();
+}
+
+function applySavedSettings(saved){
+  if(!saved) return;
+  if(typeof saved.forceRetype === "boolean") document.getElementById("forceRetype").checked = saved.forceRetype;
+  if(typeof saved.forceRetypeSkip === "boolean") document.getElementById("forceRetypeSkip").checked = saved.forceRetypeSkip;
+  if(typeof saved.enableSound === "boolean") document.getElementById("enableSound").checked = saved.enableSound;
+  if(typeof saved.enableShake === "boolean") document.getElementById("enableShake").checked = saved.enableShake;
+  if(typeof saved.flashScreen === "boolean") document.getElementById("flashScreen").checked = saved.flashScreen;
+  if(typeof saved.swapOrder === "boolean") document.getElementById("swapOrder").checked = saved.swapOrder;
+  if(saved.hintLetters !== undefined) document.getElementById("hintLetters").value = saved.hintLetters;
+}
+
+function safeWordList(list){
+  if(!Array.isArray(list)) return [];
+  return list.map(item => ({term: String(item.term || "").trim(), def: String(item.def || "").trim()}))
+    .filter(item => item.term && item.def);
+}
+
+function renderEndStats(){
+  const s = getSessionSummary();
+  document.getElementById("totalWords").innerText = s.totalWords;
+  document.getElementById("correctFirst").innerText = s.correctFirst;
+  document.getElementById("missedWords").innerText = s.missedWords;
+  document.getElementById("hintsUsedEnd").innerText = s.hintsUsed;
+  document.getElementById("percentScore").innerText = s.percentScore + "%";
+  document.getElementById("totalRounds").innerText = s.totalRounds;
+}
+
+function loadFromSaveData(payload){
+  if(!payload || !payload.state){
+    alert("Invalid save file.");
+    return;
+  }
+  const s = payload.state;
+  sourceList = safeWordList(s.sourceList);
+  vocab = safeWordList(s.vocab);
+  missed = safeWordList(s.missed);
+  wordStats = (s.wordStats && typeof s.wordStats === "object") ? s.wordStats : {};
+  hintUsedSet = new Set(Array.isArray(s.hintUsed) ? s.hintUsed : []);
+  index = Number.isFinite(Number(s.index)) ? Number(s.index) : 0;
+  round = Number.isFinite(Number(s.round)) ? Number(s.round) : 1;
+  streak = Number.isFinite(Number(s.streak)) ? Number(s.streak) : 0;
+  fileReady = !!s.fileReady || sourceList.length > 0 || vocab.length > 0;
+  if(typeof s.currentTheme === "string") currentTheme = s.currentTheme === "light" ? "light" : "dark";
+  if(typeof s.layoutMode === "string" && ["auto","desktop","mobile"].includes(s.layoutMode)) layoutMode = s.layoutMode;
+  applySavedSettings(s.settings);
+  applyBodyClasses();
+  const themeSelect = document.getElementById("themeSelect");
+  if(themeSelect) themeSelect.value = currentTheme;
+  const layoutModeSelect = document.getElementById("layoutModeSelect");
+  if(layoutModeSelect) layoutModeSelect.value = layoutMode;
+  const startBtn = document.getElementById("startButton");
+  if(startBtn) startBtn.disabled = !fileReady;
+  const ui = s.ui || {};
+  document.getElementById("streak").innerText = "🔥 " + streak;
+  if(ui.endVisible){
+    showScreen("main");
+    document.getElementById("quiz").style.display="none";
+    document.getElementById("endScreen").style.display="block";
+    renderEndStats();
+    updateProgress();
+    return;
+  }
+  showScreen("main");
+  document.getElementById("quiz").style.display="block";
+  document.getElementById("endScreen").style.display="none";
+  if(index >= vocab.length){
+    showWord();
+  } else {
+    const swap = document.getElementById("swapOrder").checked;
+    document.getElementById("definition").innerText = swap ? vocab[index].term : vocab[index].def;
+    document.getElementById("answer").value = "";
+    document.getElementById("round").innerText = "Round " + round;
+    updateProgress();
+  }
+}
+
 document.getElementById("fileInput").addEventListener("change", e=>{
   const file = e.target.files && e.target.files[0];
   if(!file) return;
@@ -660,6 +843,23 @@ document.getElementById("createFileInput").addEventListener("change", e=>{
     renderEditorTable();
   };
   r.readAsText(file);
+});
+
+document.getElementById("loadSaveInput").addEventListener("change", e=>{
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try {
+      const payload = JSON.parse(String(r.result || "{}"));
+      loadFromSaveData(payload);
+      alert("Save loaded.");
+    } catch(err){
+      alert("Could not load save file.");
+    }
+  };
+  r.readAsText(file);
+  e.target.value = "";
 });
 
 document.getElementById("editorArea").addEventListener("input", ()=>{
@@ -983,17 +1183,7 @@ function showEndScreen(){
   playFinish();
   document.getElementById("quiz").style.display="none";
   document.getElementById("endScreen").style.display="block";
-  const totalWords = Object.keys(wordStats).length;
-  const correctFirst = Object.values(wordStats).filter(w=>w.correctFirstTry).length;
-  const missedWords = Object.values(wordStats).filter(w=>w.incorrect>0).length;
-  const hintsUsed = Object.values(wordStats).filter(w=>w.hintUsed).length;
-  const percentScore = totalWords>0 ? Math.round(correctFirst/totalWords*100):100;
-  document.getElementById("totalWords").innerText = totalWords;
-  document.getElementById("correctFirst").innerText = correctFirst;
-  document.getElementById("missedWords").innerText = missedWords;
-  document.getElementById("hintsUsedEnd").innerText = hintsUsed;
-  document.getElementById("percentScore").innerText = percentScore+"%";
-  document.getElementById("totalRounds").innerText = round;
+  renderEndStats();
 }
 
 function restartQuiz(){
