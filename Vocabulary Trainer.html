@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Vocab Trainer</title>
+<style>
+:root {
+  --bg: #162460;
+  --text: #e5e7eb;
+  --card: #020617;
+  --accent: #38bdf8;
+  --correct: #22c55e;
+  --wrong: #ef4444;
+  --muted: #1e293b;
+  --border: #334155;
+}
+
+.light {
+  --bg: #e8f1ff;
+  --text: #000000;
+  --card: #f5f9ff;
+  --muted: #c7d6f0;
+  --border: #9fb3d9;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, sans-serif;
+  display: flex;
+  justify-content: center;
+  padding: 30px;
+}
+
+.container {
+  width: 540px;
+  background: var(--card);
+  padding: 20px;
+  border-radius: 12px;
+  position: relative;
+}
+.mobile-menu-toggle {
+  display: none;
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 50;
+  padding: 8px 10px;
+}
+.mobile-sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 60;
+}
+.mobile-sidebar {
+  position: fixed;
+  top: 0;
+  left: -260px;
+  width: 240px;
+  height: 100%;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  padding: 14px;
+  z-index: 70;
+  transition: left 0.25s ease;
+}
+.mobile-sidebar h3 { margin: 4px 0 10px; }
+.mobile-sidebar button {
+  width: 100%;
+  margin: 6px 0;
+  text-align: left;
+}
+.mobile-sidebar.open { left: 0; }
+.mobile-sidebar-backdrop.show { display: block; }
+
+h2 { text-align: center; }
+.panel { text-align: center; padding: 20px 10px; }
+#homeScreen p { margin: 4px 0 14px; }
+.home-actions { display: flex; justify-content: center; gap: 10px; }
+.mode-btn { min-width: 120px; padding: 10px 14px; font-weight: bold; }
+.mode-btn.create { background: #f59e0b; color: #111827; }
+.mode-btn.learn { background: #22c55e; color: #111827; }
+#startScreen { text-align: center; padding: 20px 10px; }
+#startScreen input[type="file"] { display: inline-block; margin-top: 10px; }
+.start-btn { background: #22c55e; color: #000; padding: 8px 14px; margin-top: 12px; }
+.start-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.start-actions { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
+.start-gear { width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; }
+.create-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+#createStatus { font-size: 13px; margin: 8px 0; }
+.create-row { display: flex; gap: 8px; margin: 10px 0; }
+.create-row input { flex: 1; }
+.create-row button { margin-top: 0; width: 90px; }
+#editorArea {
+  width: 100%;
+  height: 260px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 10px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+  resize: vertical;
+}
+.editor-preview-wrap { margin-top: 12px; text-align: left; }
+.editor-preview-wrap h3 { margin: 6px 0; font-size: 14px; text-align: left; }
+#editorPreview {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+  color: #111827;
+  border-radius: 8px;
+  overflow: hidden;
+}
+#editorPreview th, #editorPreview td {
+  border: 1px solid #d1d5db;
+  padding: 6px;
+  font-size: 13px;
+}
+#editorPreview td.actions { white-space: nowrap; width: 140px; }
+#editorPreview button { margin: 0 4px 0 0; padding: 4px 8px; font-size: 12px; }
+.muted-note { font-size: 12px; opacity: 0.85; margin-top: 6px; }
+.top { display: flex; justify-content: space-between; font-size: 14px; }
+.progress { height: 8px; background: var(--muted); margin: 10px 0; border-radius: 4px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); width: 0%; }
+.definition { font-size: 18px; margin: 20px 0; }
+input { width: 100%; padding: 10px; font-size: 16px; border-radius: 6px; border: none; }
+button { margin-top: 6px; padding: 6px; cursor: pointer; border-radius: 6px; border: none; }
+#message { margin-top: 10px; min-height: 24px; }
+.correct { color: var(--correct); }
+.incorrect { color: var(--wrong); }
+.banner {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: bold;
+  color: #000;
+  background: #e2e8f0;
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 5;
+}
+.banner.show { opacity: 1; transform: translateX(-50%) translateY(4px); }
+.banner.correct { background: #86efac; }
+.banner.incorrect { background: #fca5a5; }
+.shake { animation: shake 0.3s; }
+@keyframes shake { 0%{transform:translateX(0);}25%{transform:translateX(-6px);}50%{transform:translateX(6px);}75%{transform:translateX(-6px);}100%{transform:translateX(0);} }
+
+/* flash */
+.flash-correct { animation: flashGreen 0.3s; }
+.flash-wrong { animation: flashRed 0.3s; }
+@keyframes flashGreen {0%{background-color:var(--bg);}50%{background-color:#22c55e;}100%{background-color:var(--bg);}}
+@keyframes flashRed {0%{background-color:var(--bg);}50%{background-color:#ef4444;}100%{background-color:var(--bg);}}
+
+/* overlays */
+.overlay { position: fixed; inset:0; background: var(--bg); padding: 40px; display: none; overflow:auto; color: var(--text);}
+#bottomStats { margin-top:20px; padding:10px; border-radius:10px; background: var(--muted); font-size:14px; text-align:center;}
+table, th, td { border-collapse: collapse; border-bottom: 1px solid var(--border);}
+td, th { padding:6px; text-align:left;}
+#wordTable { margin: 0 auto; }
+#wordListOverlay .close-btn { display: block; margin: 12px auto 0; }
+.belowprogress { display: flex; justify-content: center; gap: 8px; margin-top: 6px; }
+body.mobile-view {
+  padding: 10px;
+}
+body.mobile-view .container {
+  width: min(100vw - 20px, 700px);
+  padding: 14px;
+}
+body.mobile-view .mobile-menu-toggle {
+  display: inline-block;
+}
+body.mobile-view .belowprogress {
+  display: none;
+}
+body.mobile-view .top {
+  gap: 8px;
+  font-size: 13px;
+}
+body.mobile-view .create-row {
+  flex-direction: column;
+}
+body.mobile-view .create-row button {
+  width: 100%;
+}
+body.mobile-view .start-gear,
+body.mobile-view #startHomeBtn {
+  display: none;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<button id="mobileMenuToggle" class="mobile-menu-toggle" onclick="toggleMobileSidebar()">☰ Menu</button>
+<div id="mobileSidebarBackdrop" class="mobile-sidebar-backdrop" onclick="closeMobileSidebar()"></div>
+<aside id="mobileSidebar" class="mobile-sidebar">
+  <h3>Menu</h3>
+  <button onclick="openLearnMenu(); closeMobileSidebar();">🎓 Learn</button>
+  <button onclick="openCreateMenu(); closeMobileSidebar();">🛠️ Editor</button>
+  <button onclick="openSettings(); closeMobileSidebar();">⚙️ Settings</button>
+  <button onclick="openWordList(); closeMobileSidebar();">📋 View Words</button>
+  <button onclick="goHome(); closeMobileSidebar();">🏠 Home</button>
+  <button onclick="closeMobileSidebar()">Close</button>
+</aside>
+
+<div id="homeScreen" class="panel">
+  <h2>📖 Vocabulary Trainer</h2>
+  <p>Choose a mode</p>
+  <div class="home-actions">
+    <button class="mode-btn create" onclick="openCreateMenu()">🛠️ Create</button>
+    <button class="mode-btn learn" onclick="openLearnMenu()">🎓 Learn</button>
+  </div>
+</div>
+
+<div id="startScreen" class="panel" style="display:none;">
+  <h2>📖 Vocabulary Trainer</h2>
+  <input type="file" id="fileInput" accept=".txt">
+  <div class="start-actions">
+    <button id="startButton" class="start-btn" onclick="startQuiz()" disabled>Start</button>
+    <button class="start-gear" onclick="openSettings()" aria-label="Settings">⚙️</button>
+    <button id="startHomeBtn" onclick="goHome()">Home</button>
+  </div>
+</div>
+
+<div id="createScreen" class="panel" style="display:none;">
+  <h2>🛠️ Create Word List</h2>
+  <div class="create-actions">
+    <button onclick="newBlankList()">New Blank</button>
+    <button onclick="triggerCreateUpload()">Upload TXT</button>
+    <button onclick="useEditorListInLearn()">Use in Learn</button>
+    <button onclick="downloadCreatedList()">Download TXT</button>
+    <button onclick="goHome()">Home</button>
+  </div>
+  <input type="file" id="createFileInput" accept=".txt" style="display:none;">
+  <div id="createStatus">Use one line per entry: word[TAB]definition</div>
+  <div class="create-row">
+    <input id="newWord" placeholder="Word">
+    <input id="newDefinition" placeholder="Definition">
+    <button onclick="addEntryToEditor()">Add</button>
+    <button id="updateEntryBtn" onclick="updateEntryInEditor()" style="display:none;">Update</button>
+    <button id="cancelEditBtn" onclick="cancelEditEntry()" style="display:none;">Cancel</button>
+  </div>
+  <textarea id="editorArea" placeholder="example<TAB>the meaning here"></textarea>
+  <div class="editor-preview-wrap">
+    <h3>Preview Table</h3>
+    <table id="editorPreview">
+      <thead>
+        <tr><th>Word</th><th>Definition</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="editorPreviewBody"></tbody>
+    </table>
+    <div class="muted-note">Edit/delete rows here, or keep editing in TXT view above.</div>
+  </div>
+</div>
+
+<div id="main" style="display:none;">
+  <div id="feedbackBanner" class="banner" role="status" aria-live="polite"></div>
+  <h2>📖 Vocabulary Trainer</h2>
+
+  <div class="top">
+    <div id="round">Round 1</div>
+    <div id="percent">0%</div>
+    <div id="streak">🔥 0</div>
+  </div>
+
+  <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+
+  <div class="belowprogress">
+    <button onclick="openSettings()">⚙️</button>
+    <button onclick="openWordList()">📋 View Words</button>
+    <button onclick="openCreateFromLearn()">🛠️ Edit in Create</button>
+    <button onclick="goHome()">🏠 Home</button>
+  </div>
+
+  <div id="quiz" style="display:none">
+    <div class="definition" id="definition"></div>
+    <input id="answer" placeholder="Type the word">
+    <button onclick="submitAnswer()">Submit</button>
+    <button onclick="showHint()">Hint</button>
+    <button onclick="skipWord()">Skip</button>
+    <div id="message"></div>
+  </div>
+
+  <!-- END SCREEN -->
+  <div id="endScreen" style="display:none; text-align:center; margin-top:30px;">
+    <h2>🏁 Session Complete!</h2>
+    <p>Total words: <span id="totalWords">0</span></p>
+    <p>Correct first try: <span id="correctFirst">0</span></p>
+    <p>Incorrect / missed: <span id="missedWords">0</span></p>
+    <p>Hints used: <span id="hintsUsedEnd">0</span></p>
+    <p>Score: <span id="percentScore">0%</span></p>
+    <p>Total rounds: <span id="totalRounds">1</span></p>
+    <button onclick="restartQuiz()">🔄 Restart Quiz</button>
+    <button onclick="viewWordResults()">📊 View Word Results</button>
+  </div>
+
+  <!-- BOTTOM STATS -->
+  <div id="bottomStats">
+    💡 Hints used: <span id="hintsUsed">0</span> | 
+    ✔️ Correct: <span id="totalCorrect">0</span> | 
+    ❌ Incorrect: <span id="totalIncorrect">0</span>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="overlay" id="settings">
+<h2>⚙️ Settings</h2>
+<label><input type="checkbox" id="forceRetype" checked> Force retype on wrong</label><br>
+<label><input type="checkbox" id="forceRetypeSkip" checked> Force retype on skip</label><br>
+<label><input type="checkbox" id="enableSound" checked> Sound effects</label><br>
+<label><input type="checkbox" id="enableShake" checked> Shake animation</label><br>
+<label><input type="checkbox" id="flashScreen" checked> Flash screen on correct/wrong</label><br><br>
+Hint letters: <input type="number" id="hintLetters" value="3" min="1" max="10"><br><br>
+<label><input type="checkbox" id="swapOrder"> Swap term/definition order (before uploading file)</label><br><br>
+Theme:
+<select id="themeSelect" onchange="setTheme(this.value)">
+  <option value="dark">Dark</option>
+  <option value="light">Light</option>
+</select><br><br>
+Layout:
+<select id="layoutModeSelect" onchange="setLayoutMode(this.value)">
+  <option value="auto">Auto (detect browser)</option>
+  <option value="desktop">Desktop</option>
+  <option value="mobile">Mobile</option>
+</select><br><br>
+<button onclick="closeSettings()">Close</button>
+</div>
+
+<!-- WORD LIST -->
+<div class="overlay" id="wordListOverlay">
+<h2>📋 Word List</h2>
+<table id="wordTable">
+<thead><tr><th>Term</th><th>Definition</th><th>Status</th></tr></thead>
+<tbody></tbody>
+</table>
+<button class="close-btn" onclick="closeWordList()">Close</button>
+</div>
+
+
+<audio id="soundWrong" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"></audio>
+<!-- Quiz Sounds -->
+<audio id="soundCorrect" src="https://www.myinstants.com/media/sounds/quizlet-correct.mp3"></audio>
+
+<!-- UI Sounds -->
+<audio id="soundClick" src="https://www.myinstants.com/media/sounds/minecraft-click-cropped.mp3"></audio>
+<audio id="soundFinish" src="https://cdn.pixabay.com/audio/2025/05/12/audio_582a9c9e72.mp3"></audio>
+
+
+<script>
+let vocab = [];
+let index = 0;
+let round = 1;
+let streak = 0;
+let missed = [];
+let wordStats = {}; // track each word's status
+let hintUsedSet = new Set();
+let fileReady = false;
+let bannerTimer = null;
+let editingRowIndex = -1;
+let sourceList = [];
+let currentTheme = "dark";
+let layoutMode = "auto";
+
+function normalize(t){ return t.toLowerCase().replace(/[-\s]/g,"").replace(/es$/,"").replace(/s$/,""); }
+
+function isMobileBrowser(){
+  const byUA = /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent || "");
+  const bySize = window.matchMedia && window.matchMedia("(max-width: 820px)").matches;
+  return byUA || bySize;
+}
+
+function shouldUseMobileView(){
+  if(layoutMode === "mobile") return true;
+  if(layoutMode === "desktop") return false;
+  return isMobileBrowser();
+}
+
+function applyBodyClasses(){
+  const mobile = shouldUseMobileView();
+  document.body.classList.toggle("light", currentTheme === "light");
+  document.body.classList.toggle("mobile-view", mobile);
+  if(!mobile) closeMobileSidebar();
+}
+
+function setLayoutMode(mode){
+  layoutMode = mode;
+  try { localStorage.setItem("layoutMode", mode); } catch(e) {}
+  applyBodyClasses();
+}
+
+function showScreen(id){
+  closeMobileSidebar();
+  document.getElementById("homeScreen").style.display = "none";
+  document.getElementById("startScreen").style.display = "none";
+  document.getElementById("createScreen").style.display = "none";
+  document.getElementById("main").style.display = "none";
+  document.getElementById(id).style.display = "block";
+}
+
+function openLearnMenu(){
+  showScreen("startScreen");
+}
+
+function openCreateMenu(){
+  showScreen("createScreen");
+  renderEditorTable();
+}
+
+function goHome(){
+  closeSettings();
+  closeWordList();
+  showScreen("homeScreen");
+}
+
+function toggleMobileSidebar(){
+  const sidebar = document.getElementById("mobileSidebar");
+  const backdrop = document.getElementById("mobileSidebarBackdrop");
+  if(!sidebar || !backdrop) return;
+  const open = sidebar.classList.contains("open");
+  if(open){
+    closeMobileSidebar();
+  } else {
+    sidebar.classList.add("open");
+    backdrop.classList.add("show");
+  }
+}
+
+function closeMobileSidebar(){
+  const sidebar = document.getElementById("mobileSidebar");
+  const backdrop = document.getElementById("mobileSidebarBackdrop");
+  if(sidebar) sidebar.classList.remove("open");
+  if(backdrop) backdrop.classList.remove("show");
+}
+
+function parseVocabText(text){
+  return text.split(/\r?\n/)
+    .filter(l => l.includes("\t"))
+    .map(l => {
+      const parts = l.split("\t");
+      return {term: (parts[0] || "").trim(), def: (parts[1] || "").trim()};
+    })
+    .filter(v => v.term && v.def);
+}
+
+function loadVocabData(parsed){
+  if(!parsed.length){
+    fileReady = false;
+    const startBtn = document.getElementById("startButton");
+    if(startBtn) startBtn.disabled = true;
+    alert("No valid lines found. Use: word[TAB]definition");
+    return false;
+  }
+  vocab = parsed;
+  sourceList = parsed.map(v => ({term: v.term, def: v.def}));
+  index = 0;
+  round = 1;
+  streak = 0;
+  missed = [];
+  wordStats = {};
+  hintUsedSet.clear();
+  vocab.forEach(v=>wordStats[v.term]={correctFirstTry:false, incorrect:0, hintUsed:false});
+  shuffle(vocab);
+  fileReady = true;
+  const startBtn = document.getElementById("startButton");
+  if(startBtn) startBtn.disabled = false;
+  return true;
+}
+
+document.getElementById("fileInput").addEventListener("change", e=>{
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    loadVocabData(parseVocabText(String(r.result || "")));
+  };
+  r.readAsText(file);
+});
+
+document.getElementById("createFileInput").addEventListener("change", e=>{
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    const text = String(r.result || "");
+    document.getElementById("editorArea").value = text.trim();
+    document.getElementById("createStatus").innerText = "Loaded file. Edit entries, then Download TXT.";
+    cancelEditEntry();
+    renderEditorTable();
+  };
+  r.readAsText(file);
+});
+
+document.getElementById("editorArea").addEventListener("input", ()=>{
+  if(editingRowIndex >= 0){
+    const entries = getEditorEntries();
+    if(!entries[editingRowIndex]) cancelEditEntry();
+  }
+  renderEditorTable();
+});
+
+function startQuiz(){
+  if(!fileReady) return;
+  showScreen("main");
+  document.getElementById("quiz").style.display="block";
+  document.getElementById("endScreen").style.display="none";
+  document.getElementById("streak").innerText="🔥 0";
+  showWord();
+}
+
+function triggerCreateUpload(){
+  const el = document.getElementById("createFileInput");
+  if(el) el.click();
+}
+
+function newBlankList(){
+  const current = document.getElementById("editorArea").value.trim();
+  if(current && !confirm("Clear current editor content?")){
+    return;
+  }
+  document.getElementById("editorArea").value = "";
+  document.getElementById("createStatus").innerText = "Blank list ready. Add lines and download when done.";
+  cancelEditEntry();
+  renderEditorTable();
+}
+
+function addEntryToEditor(){
+  const wordInput = document.getElementById("newWord");
+  const defInput = document.getElementById("newDefinition");
+  const word = wordInput.value.trim();
+  const def = defInput.value.trim();
+  if(!word || !def){
+    alert("Add both word and definition first.");
+    return;
+  }
+  const area = document.getElementById("editorArea");
+  const line = word + "\t" + def;
+  area.value = area.value.trim() ? area.value.trim() + "\n" + line : line;
+  wordInput.value = "";
+  defInput.value = "";
+  wordInput.focus();
+  document.getElementById("createStatus").innerText = "Entry added. Keep editing or download the TXT file.";
+  renderEditorTable();
+}
+
+function getEditorEntries(){
+  return parseVocabText(document.getElementById("editorArea").value);
+}
+
+function writeEntriesToEditor(entries){
+  document.getElementById("editorArea").value = entries
+    .map(e => e.term + "\t" + e.def)
+    .join("\n");
+}
+
+function startEditEntry(rowIndex){
+  const entries = getEditorEntries();
+  const row = entries[rowIndex];
+  if(!row) return;
+  editingRowIndex = rowIndex;
+  document.getElementById("newWord").value = row.term;
+  document.getElementById("newDefinition").value = row.def;
+  document.getElementById("updateEntryBtn").style.display = "inline-block";
+  document.getElementById("cancelEditBtn").style.display = "inline-block";
+  document.getElementById("createStatus").innerText = "Editing row " + (rowIndex + 1) + ".";
+}
+
+function cancelEditEntry(){
+  editingRowIndex = -1;
+  document.getElementById("newWord").value = "";
+  document.getElementById("newDefinition").value = "";
+  document.getElementById("updateEntryBtn").style.display = "none";
+  document.getElementById("cancelEditBtn").style.display = "none";
+}
+
+function updateEntryInEditor(){
+  if(editingRowIndex < 0) return;
+  const word = document.getElementById("newWord").value.trim();
+  const def = document.getElementById("newDefinition").value.trim();
+  if(!word || !def){
+    alert("Add both word and definition first.");
+    return;
+  }
+  const entries = getEditorEntries();
+  if(!entries[editingRowIndex]) return;
+  entries[editingRowIndex] = {term: word, def: def};
+  writeEntriesToEditor(entries);
+  document.getElementById("createStatus").innerText = "Row updated.";
+  cancelEditEntry();
+  renderEditorTable();
+}
+
+function deleteEntryFromEditor(rowIndex){
+  const entries = getEditorEntries();
+  if(!entries[rowIndex]) return;
+  entries.splice(rowIndex, 1);
+  writeEntriesToEditor(entries);
+  if(editingRowIndex === rowIndex) cancelEditEntry();
+  if(editingRowIndex > rowIndex) editingRowIndex--;
+  document.getElementById("createStatus").innerText = "Row deleted.";
+  renderEditorTable();
+}
+
+function renderEditorTable(){
+  const entries = getEditorEntries();
+  const tbody = document.getElementById("editorPreviewBody");
+  tbody.innerHTML = "";
+  if(!entries.length){
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 3;
+    td.textContent = "No valid rows yet. Use: word[TAB]definition";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  entries.forEach((entry, i) => {
+    const tr = document.createElement("tr");
+    const termTd = document.createElement("td");
+    const defTd = document.createElement("td");
+    const actionsTd = document.createElement("td");
+    actionsTd.className = "actions";
+    termTd.textContent = entry.term;
+    defTd.textContent = entry.def;
+    actionsTd.innerHTML = '<button type="button">Edit</button><button type="button">Delete</button>';
+    const buttons = actionsTd.querySelectorAll("button");
+    buttons[0].onclick = ()=>startEditEntry(i);
+    buttons[1].onclick = ()=>deleteEntryFromEditor(i);
+    tr.appendChild(termTd);
+    tr.appendChild(defTd);
+    tr.appendChild(actionsTd);
+    tbody.appendChild(tr);
+  });
+}
+
+function downloadCreatedList(){
+  const content = document.getElementById("editorArea").value.trim();
+  if(!content){
+    alert("Editor is empty.");
+    return;
+  }
+  const blob = new Blob([content + "\n"], {type: "text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "vocab.txt";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  document.getElementById("createStatus").innerText = "Downloaded vocab.txt.";
+}
+
+function useEditorListInLearn(){
+  const entries = getEditorEntries();
+  if(!entries.length){
+    alert("No valid rows to use. Add lines as: word[TAB]definition");
+    return;
+  }
+  if(!loadVocabData(entries)) return;
+  startQuiz();
+  document.getElementById("createStatus").innerText = "List sent to Learn mode.";
+}
+
+function openCreateFromLearn(){
+  if(sourceList.length){
+    writeEntriesToEditor(sourceList);
+    renderEditorTable();
+    cancelEditEntry();
+    document.getElementById("createStatus").innerText = "Loaded current Learn list for editing.";
+  }
+  showScreen("createScreen");
+}
+
+function shuffle(a){ a.sort(()=>Math.random()-0.5); }
+
+function showWord(){
+  if(index>=vocab.length){
+    if(missed.length===0){ showEndScreen(); return; }
+    vocab = missed; missed=[]; index=0; round++;
+  }
+  const swap = document.getElementById("swapOrder").checked;
+  document.getElementById("definition").innerText = swap ? vocab[index].term : vocab[index].def;
+  document.getElementById("answer").value="";
+  document.getElementById("round").innerText="Round "+round;
+  updateProgress();
+}
+
+function flashScreen(isCorrect){
+  if(!document.getElementById("flashScreen").checked) return;
+  document.body.classList.add(isCorrect?"flash-correct":"flash-wrong");
+  setTimeout(()=>document.body.classList.remove(isCorrect?"flash-correct":"flash-wrong"),300);
+}
+
+function showBanner(text, isCorrect){
+  const banner = document.getElementById("feedbackBanner");
+  if(!banner) return;
+  if(bannerTimer) clearTimeout(bannerTimer);
+  banner.textContent = text;
+  banner.className = "banner show " + (isCorrect ? "correct" : "incorrect");
+  bannerTimer = setTimeout(()=>{
+    banner.className = "banner";
+  }, 1200);
+}
+
+function submitAnswer(){
+  const input=document.getElementById("answer");
+  const word=vocab[index].term;
+  const stats=wordStats[word];
+
+  if(normalize(input.value)===normalize(word)){
+    showBanner("✅ Correct!", true);
+
+     // ✅ Only mark first try correct if this is truly the first attempt
+    if(wordStats[word].incorrect === 0 && !wordStats[word].hintUsed && !wordStats[word].correctFirstTry){
+        wordStats[word].correctFirstTry = true;
+    }
+
+    if(stats.incorrect===0 && !stats.correctFirstTry) stats.correctFirstTry=true;
+    flashScreen(true);
+    if(document.getElementById("enableSound").checked) document.getElementById("soundCorrect").play();
+    streak++; index++;
+    showWord();
+  } else {
+    showBanner("❌ Incorrect. Correct: "+word, false);
+    stats.incorrect++;
+    flashScreen(false);
+    if(document.getElementById("enableSound").checked) document.getElementById("soundWrong").play();
+    streak=0; missed.push(vocab[index]);
+    if(document.getElementById("enableShake").checked){
+      input.classList.add("shake");
+      setTimeout(()=>input.classList.remove("shake"),300);
+    }
+    if(document.getElementById("forceRetype").checked){
+      forceRetype(word);
+    } else { index++; showWord(); }
+  }
+  document.getElementById("streak").innerText="🔥 "+streak;
+  updateProgress();
+}
+
+function forceRetype(word){
+  const input=document.getElementById("answer");
+  input.value=""; input.focus();
+  input.onkeydown=e=>{
+    if(e.key==="Enter" && normalize(input.value)===normalize(word)){
+      input.onkeydown=null; index++; showWord();
+    }
+  };
+}
+
+function showHint(){
+  const letters=Number(document.getElementById("hintLetters").value);
+  const word=vocab[index].term;
+  hintUsedSet.add(word);
+  wordStats[word].hintUsed=true;
+  alert("💡 "+normalize(word).slice(0,letters)+"_");
+  updateProgress();
+}
+
+function skipWord(){
+  const word=vocab[index].term;
+  wordStats[word].incorrect++;
+  missed.push(vocab[index]);
+  streak=0;
+  document.getElementById("streak").innerText="🔥 0";
+  if(document.getElementById("forceRetypeSkip").checked){
+    alert("⏭ Skipped. Answer: "+word);
+    forceRetype(word);
+  } else { index++; showWord(); }
+  updateProgress();
+}
+
+function playFinish(){
+  const audio = document.getElementById("soundFinish");
+  if (!audio) return;
+  audio.currentTime = 0;
+  audio.play().catch(() => {});
+}
+
+
+function updateProgress(){
+  const totalWords = vocab.length + missed.length;
+  const correctCount = Object.values(wordStats).filter(w=>w.correctFirstTry).length;
+  const incorrectCount = Object.values(wordStats).filter(w=>w.incorrect>0).length;
+  document.getElementById("progressFill").style.width = totalWords>0 ? Math.round(index/totalWords*100)+"%" : "0%";
+  document.getElementById("percent").innerText = totalWords>0 ? Math.round(index/totalWords*100)+"%" : "0%";
+  document.getElementById("hintsUsed").innerText=hintUsedSet.size;
+  document.getElementById("totalCorrect").innerText=correctCount;
+  document.getElementById("totalIncorrect").innerText=incorrectCount;
+}
+
+document.getElementById("answer").addEventListener("keydown", e=>{ if(e.key==="Enter") submitAnswer(); });
+
+function openSettings(){ document.getElementById("settings").style.display="block"; }
+function closeSettings(){ document.getElementById("settings").style.display="none"; }
+function setTheme(t){
+  currentTheme = t === "light" ? "light" : "dark";
+  try { localStorage.setItem("themeMode", currentTheme); } catch(e) {}
+  applyBodyClasses();
+}
+
+function showEndScreen(){
+  playFinish();
+  document.getElementById("quiz").style.display="none";
+  document.getElementById("endScreen").style.display="block";
+  const totalWords = Object.keys(wordStats).length;
+  const correctFirst = Object.values(wordStats).filter(w=>w.correctFirstTry).length;
+  const missedWords = Object.values(wordStats).filter(w=>w.incorrect>0).length;
+  const hintsUsed = Object.values(wordStats).filter(w=>w.hintUsed).length;
+  const percentScore = totalWords>0 ? Math.round(correctFirst/totalWords*100):100;
+  document.getElementById("totalWords").innerText = totalWords;
+  document.getElementById("correctFirst").innerText = correctFirst;
+  document.getElementById("missedWords").innerText = missedWords;
+  document.getElementById("hintsUsedEnd").innerText = hintsUsed;
+  document.getElementById("percentScore").innerText = percentScore+"%";
+  document.getElementById("totalRounds").innerText = round;
+}
+
+function restartQuiz(){
+  index=0; round=1; streak=0; missed=[];
+  for(const w in wordStats){ wordStats[w]={correctFirstTry:false, incorrect:0, hintUsed:false}; }
+  hintUsedSet.clear();
+  document.getElementById("endScreen").style.display="none";
+  document.getElementById("quiz").style.display="block";
+  shuffle(vocab); showWord();
+  document.getElementById("streak").innerText="🔥 0";
+  updateProgress();
+}
+
+function openWordList(){
+  const tbody=document.querySelector("#wordTable tbody");
+  tbody.innerHTML="";
+  const swap=document.getElementById("swapOrder").checked;
+  for(const item of vocab){
+    const tr=document.createElement("tr");
+    const termTd=document.createElement("td");
+    const defTd=document.createElement("td");
+    const statusTd=document.createElement("td");
+    termTd.textContent = swap ? item.def : item.term;
+    defTd.textContent = swap ? item.term : item.def;
+    const stats=wordStats[item.term];
+    let status="";
+    if(stats.correctFirstTry) status="Correct first try";
+    else if(stats.hintUsed) status="Hint used";
+    else if(stats.incorrect>0) status="Incorrect";
+    statusTd.textContent=status;
+    tr.appendChild(termTd); tr.appendChild(defTd); tr.appendChild(statusTd);
+    tbody.appendChild(tr);
+  }
+  document.getElementById("wordListOverlay").style.display="block";
+}
+
+function viewWordResults(){
+  openWordList();
+}
+
+function closeWordList(){ document.getElementById("wordListOverlay").style.display="none"; }
+
+try {
+  const savedTheme = localStorage.getItem("themeMode");
+  const savedLayout = localStorage.getItem("layoutMode");
+  if(savedTheme === "light" || savedTheme === "dark") currentTheme = savedTheme;
+  if(savedLayout === "auto" || savedLayout === "desktop" || savedLayout === "mobile") layoutMode = savedLayout;
+} catch(e) {}
+
+applyBodyClasses();
+
+const themeSelect = document.getElementById("themeSelect");
+if(themeSelect) themeSelect.value = currentTheme;
+const layoutModeSelect = document.getElementById("layoutModeSelect");
+if(layoutModeSelect) layoutModeSelect.value = layoutMode;
+
+window.addEventListener("resize", ()=>{
+  if(layoutMode === "auto") applyBodyClasses();
+});
+</script>
+</body>
+</html>
