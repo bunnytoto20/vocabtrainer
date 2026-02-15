@@ -1,0 +1,20 @@
+Hello	A greeting word (5 letters)
+Goodbye	A word used when leaving
+Cat	A small domesticated animal that purrs
+Dog	A loyal domestic animal that barks
+Sun	The star that gives us light and warmth
+Moon	The object that orbits the Earth at night
+Water	A clear liquid that we drink
+Fire	Hot element that produces heat and light
+Tree	A plant with a trunk and leaves
+Flower	A colorful plant part that blooms
+Book	A set of written or printed pages
+Pen	An object used for writing
+Chair	A seat for one person
+Table	A flat surface to place things on
+House	A building where people live
+Car	A vehicle with wheels used for transport
+Bike	A two-wheeled vehicle you pedal (4 letters)
+School	A place for learning
+Food	Substances we eat to live
+Music	Sounds arranged in a pleasing way
