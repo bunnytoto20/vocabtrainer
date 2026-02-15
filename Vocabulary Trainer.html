@@ -118,6 +118,8 @@ h2 { text-align: center; }
 .create-row { display: flex; gap: 8px; margin: 10px 0; }
 .create-row input { flex: 1; }
 .create-row button { margin-top: 0; width: 90px; }
+.title-row { margin: 8px 0 10px; text-align: left; }
+.title-row label { display: block; font-size: 13px; margin-bottom: 6px; }
 #editorArea {
   width: 100%;
   height: 260px;
@@ -340,6 +342,7 @@ body.mobile-view #startHomeBtn {
 
 <div id="startScreen" class="panel" style="display:none;">
   <h2>📖 Vocabulary Trainer</h2>
+  <div id="startQuizTitle" style="margin-bottom:8px; font-weight:bold;"></div>
   <input type="file" id="fileInput" accept=".txt">
   <input type="file" id="loadSaveInput" accept=".json" style="display:none;">
   <div class="start-actions">
@@ -374,6 +377,10 @@ body.mobile-view #startHomeBtn {
   </div>
   <input type="file" id="createFileInput" accept=".txt" style="display:none;">
   <div id="createStatus">Use one line per entry: word[TAB]definition</div>
+  <div class="title-row">
+    <label for="editorQuizTitle">Quiz title (optional)</label>
+    <input id="editorQuizTitle" placeholder="Example: Biology Chapter 3">
+  </div>
   <div class="create-row">
     <input id="newWord" placeholder="Word">
     <input id="newDefinition" placeholder="Definition">
@@ -398,6 +405,7 @@ body.mobile-view #startHomeBtn {
 <div id="main" style="display:none;">
   <div id="feedbackBanner" class="banner" role="status" aria-live="polite"></div>
   <h2>📖 Vocabulary Trainer</h2>
+  <div id="learnQuizTitle" style="text-align:center; margin-top:-4px; margin-bottom:10px; font-weight:bold;"></div>
 
   <div class="top">
     <div id="round">Round 1</div>
@@ -509,10 +517,66 @@ let fileReady = false;
 let bannerTimer = null;
 let editingRowIndex = -1;
 let sourceList = [];
+let currentQuizTitle = "";
 let currentTheme = "dark";
 let layoutMode = "auto";
 
 function normalize(t){ return t.toLowerCase().replace(/[-\s]/g,"").replace(/es$/,"").replace(/s$/,""); }
+
+function setQuizTitle(title){
+  currentQuizTitle = String(title || "").trim();
+  const text = currentQuizTitle ? "Quiz: " + currentQuizTitle : "";
+  const startTitle = document.getElementById("startQuizTitle");
+  const learnTitle = document.getElementById("learnQuizTitle");
+  if(startTitle) startTitle.innerText = text;
+  if(learnTitle) learnTitle.innerText = text;
+  const editorTitle = document.getElementById("editorQuizTitle");
+  if(editorTitle && document.activeElement !== editorTitle){
+    editorTitle.value = currentQuizTitle;
+  }
+}
+
+function syncQuizTitleFromUI(){
+  const editorTitle = document.getElementById("editorQuizTitle");
+  if(editorTitle){
+    const typed = String(editorTitle.value || "").trim();
+    if(typed){
+      setQuizTitle(typed);
+      return;
+    }
+  }
+}
+
+function sanitizeFilePart(value){
+  const cleaned = String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return cleaned || "vocab-quiz";
+}
+
+function getTimestampForFile(){
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const h = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  const s = String(d.getSeconds()).padStart(2, "0");
+  return y + m + day + "-" + h + min + s;
+}
+
+function buildSaveFilename(kind){
+  const base = sanitizeFilePart(currentQuizTitle || "vocab-quiz");
+  return base + "-" + kind + "-" + getTimestampForFile() + ".json";
+}
+
+function fileNameToTitle(name){
+  return String(name || "")
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+}
 
 function isMobileBrowser(){
   const byUA = /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent || "");
@@ -558,6 +622,7 @@ function openLearnMenu(){
 
 function openCreateMenu(){
   showScreen("createScreen");
+  setQuizTitle(currentQuizTitle);
   renderEditorTable();
 }
 
@@ -644,10 +709,12 @@ function getWordListStats(){
 }
 
 function buildSavePayload(saveType){
+  syncQuizTitleFromUI();
   return {
     version: 1,
     savedAt: new Date().toISOString(),
     saveType: saveType,
+    quizTitle: currentQuizTitle,
     summary: getSessionSummary(),
     wordListStats: getWordListStats(),
     state: {
@@ -660,6 +727,7 @@ function buildSavePayload(saveType){
       wordStats: wordStats,
       hintUsed: Array.from(hintUsedSet),
       fileReady: fileReady,
+      quizTitle: currentQuizTitle,
       currentTheme: currentTheme,
       layoutMode: layoutMode,
       settings: {
@@ -725,19 +793,21 @@ function loadVocabData(parsed){
 }
 
 function saveProgress(){
+  syncQuizTitleFromUI();
   if(!fileReady){
     alert("No active quiz to save yet.");
     return;
   }
-  downloadJson("vocab-progress-save.json", buildSavePayload("progress"));
+  downloadJson(buildSaveFilename("progress-save"), buildSavePayload("progress"));
 }
 
 function saveResults(){
+  syncQuizTitleFromUI();
   if(!fileReady){
     alert("No results to save yet.");
     return;
   }
-  downloadJson("vocab-results-save.json", buildSavePayload("results"));
+  downloadJson(buildSaveFilename("results-save"), buildSavePayload("results"));
 }
 
 function triggerLoadSave(){
@@ -787,6 +857,7 @@ function loadFromSaveData(payload){
   round = Number.isFinite(Number(s.round)) ? Number(s.round) : 1;
   streak = Number.isFinite(Number(s.streak)) ? Number(s.streak) : 0;
   fileReady = !!s.fileReady || sourceList.length > 0 || vocab.length > 0;
+  setQuizTitle(s.quizTitle || payload.quizTitle || currentQuizTitle);
   if(typeof s.currentTheme === "string") currentTheme = s.currentTheme === "light" ? "light" : "dark";
   if(typeof s.layoutMode === "string" && ["auto","desktop","mobile"].includes(s.layoutMode)) layoutMode = s.layoutMode;
   applySavedSettings(s.settings);
@@ -824,9 +895,11 @@ function loadFromSaveData(payload){
 document.getElementById("fileInput").addEventListener("change", e=>{
   const file = e.target.files && e.target.files[0];
   if(!file) return;
+  const titleFromFile = fileNameToTitle(file.name);
   const r = new FileReader();
   r.onload = ()=>{
-    loadVocabData(parseVocabText(String(r.result || "")));
+    const loaded = loadVocabData(parseVocabText(String(r.result || "")));
+    if(loaded && titleFromFile) setQuizTitle(titleFromFile);
   };
   r.readAsText(file);
 });
@@ -834,10 +907,12 @@ document.getElementById("fileInput").addEventListener("change", e=>{
 document.getElementById("createFileInput").addEventListener("change", e=>{
   const file = e.target.files && e.target.files[0];
   if(!file) return;
+  const titleFromFile = fileNameToTitle(file.name);
   const r = new FileReader();
   r.onload = ()=>{
     const text = String(r.result || "");
     document.getElementById("editorArea").value = text.trim();
+    if(titleFromFile) setQuizTitle(titleFromFile);
     document.getElementById("createStatus").innerText = "Loaded file. Edit entries, then Download TXT.";
     cancelEditEntry();
     renderEditorTable();
@@ -1015,11 +1090,13 @@ function downloadCreatedList(){
     alert("Editor is empty.");
     return;
   }
+  const editorTitle = String(document.getElementById("editorQuizTitle").value || "").trim();
+  if(editorTitle) setQuizTitle(editorTitle);
   const blob = new Blob([content + "\n"], {type: "text/plain;charset=utf-8"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "vocab.txt";
+  a.download = editorTitle ? (sanitizeFilePart(editorTitle) + ".txt") : "vocab.txt";
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -1033,6 +1110,7 @@ function useEditorListInLearn(){
     alert("No valid rows to use. Add lines as: word[TAB]definition");
     return;
   }
+  setQuizTitle(document.getElementById("editorQuizTitle").value);
   if(!loadVocabData(entries)) return;
   startQuiz();
   document.getElementById("createStatus").innerText = "List sent to Learn mode.";
@@ -1043,6 +1121,7 @@ function openCreateFromLearn(){
     writeEntriesToEditor(sourceList);
     renderEditorTable();
     cancelEditEntry();
+    setQuizTitle(currentQuizTitle);
     document.getElementById("createStatus").innerText = "Loaded current Learn list for editing.";
   }
   showScreen("createScreen");
